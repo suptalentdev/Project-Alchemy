@@ -1,4 +1,6 @@
-contract BLAKE2b {
+import "./GasTest.sol";
+
+contract BLAKE2b is GasTest{
 
   //CONSTANTS
   uint8[16][12] public SIGMA = [
@@ -32,17 +34,8 @@ contract BLAKE2b {
     uint outlen; //diigest output size
   }
 
-
-  //EVENTS FOR DEBUGGING ONLY
-
-  event Init(uint64[8] h, uint64 c);
-  event PreCompress(uint64[16] v, uint64[16] m);
-  event PostCompress(uint64[16] v);
-  event Update(uint8[128] b, uint64[8] h, uint64[2] t);
-  event H(uint64[8] h);
-  event Param(uint64[8] h, uint64[2] salt);
-
   function G(uint64[16] v, uint a, uint b, uint c, uint d, uint64 x, uint64 y) constant { //OPTIMIZE HERE
+       Log("G start");
        v[a] = v[a] + v[b] + x;
        v[d] = rotate(v[d] ^ v[a], 32);
        v[c] = v[c] + v[d];
@@ -51,9 +44,11 @@ contract BLAKE2b {
        v[d] = rotate(v[d] ^ v[a], 16);
        v[c] = v[c] + v[d];
        v[b] = rotate(v[b] ^ v[c], 63);
+       Log("G End");
   }
 
   function compress(BLAKE2b_ctx ctx, bool last) private {
+    Log("Begin Compress");
     uint64[16] memory v;
     uint64[16] memory m;
 
@@ -78,8 +73,7 @@ contract BLAKE2b {
       m[i] = mi;
     }
 
-    PreCompress(v,m);
-
+    Log("Compress: Begin G");
     for(i=0; i<12; i++){
       G( v, 0, 4, 8, 12, m[SIGMA[i][0]], m[SIGMA[i][1]]);
       G( v, 1, 5, 9, 13, m[SIGMA[i][2]], m[SIGMA[i][3]]);
@@ -89,17 +83,21 @@ contract BLAKE2b {
       G( v, 1, 6, 11, 12, m[SIGMA[i][10]], m[SIGMA[i][11]]);
       G( v, 2, 7, 8, 13, m[SIGMA[i][12]], m[SIGMA[i][13]]);
       G( v, 3, 4, 9, 14, m[SIGMA[i][14]], m[SIGMA[i][15]]);
-      PostCompress(v);
     }
+
+    Log("Compress: End G");
 
 
     for(i=0; i<8; ++i){
       ctx.h[i] = ctx.h[i] ^ v[i] ^ v[i+8];
     }
-    H(ctx.h);
+
+    Log("End Compress");
   }
 
   function init(BLAKE2b_ctx ctx, uint64 outlen, bytes key, uint64[2] salt, uint64[2] person) private{
+      Log("Begin init");
+
       uint i;
 
       if(outlen == 0 || outlen > 64 || key.length > 64) throw;
@@ -108,13 +106,14 @@ contract BLAKE2b {
         ctx.h[i] = IV[i];
       }
 
+      Log("Copied IV");
+
       ctx.h[0] = ctx.h[0] ^ 0x01010000 ^ shift_left(uint64(key.length), 8) ^ outlen; // Set up parameter block
       ctx.h[4] = ctx.h[4] ^ salt[0];
       ctx.h[5] = ctx.h[5] ^ salt[1];
       ctx.h[6] = ctx.h[6] ^ person[0];
       ctx.h[7] = ctx.h[7] ^ person[1];
 
-      Param(ctx.h, salt);
       ctx.t[0] = 0;
       ctx.t[1] = 0;
 
@@ -123,15 +122,20 @@ contract BLAKE2b {
       ctx.outlen = outlen;
       i = key.length;
 
+      Log("Set up parameters");
+
       for(i = key.length; i < 128; i++){
         ctx.b[i] = 0;
       }
+
+      Log("Fill buffer");
 
       if(key.length > 0){
         update(ctx, key);
         ctx.c = 128;
       }
-      Init(ctx.h, ctx.c);
+
+      Log("Add key");
 
   }
 
@@ -150,7 +154,6 @@ contract BLAKE2b {
 
       ctx.b[ctx.c++] = uint8(input[i]);
 
-      Update(ctx.b, ctx.h, ctx.t);
     }
   }
 
