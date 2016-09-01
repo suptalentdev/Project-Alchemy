@@ -36,19 +36,28 @@ contract BLAKE2b is GasTest{
 
 
   function G(uint64[16] v, uint a, uint b, uint c, uint d, uint64 x, uint64 y) constant { //OPTIMIZE HERE
-       Log("G start");
-       v[a] = v[a] + v[b] + x;
-       v[d] = rotate(v[d] ^ v[a], 32);
-       v[c] = v[c] + v[d];
-       v[b] = rotate(v[b] ^ v[c], 24);
-       v[a] = v[a] + v[b] + y;
-       v[d] = rotate(v[d] ^ v[a], 16);
-       v[c] = v[c] + v[d];
-       v[b] = rotate(v[b] ^ v[c], 63);
+       //Log("G start");
+       uint64 va = v[a];
+       uint64 vb = v[b];
+       uint64 vc = v[c];
+       uint64 vd = v[d];
+       va = va + vb + x;
+       vd = rotate(vd ^ va, 32);
+       vc = vc + vd;
+       vb = rotate(vb ^ vc, 24);
+       va = va + vb + y;
+       vd = rotate(vd ^ va, 16);
+       vc = vc + vd;
+       vb = rotate(vb ^ vc, 63);
+
+       v[a] = va;
+       v[b] = vb;
+       v[c] = vc;
+       v[d] = vd;
   }
 
   function compress(BLAKE2b_ctx ctx, bool last) private {
-    Log("Begin Compress");
+    //Log("Begin Compress");
     uint64[16] memory v;
     uint64[16] memory m;
 
@@ -73,7 +82,7 @@ contract BLAKE2b is GasTest{
       m[i] = mi;
     }
 
-    Log("Compress: Begin G");
+    //Log("Compress: Begin G");
     for(i=0; i<12; i++){
       G( v, 0, 4, 8, 12, m[SIGMA[i][0]], m[SIGMA[i][1]]);
       G( v, 1, 5, 9, 13, m[SIGMA[i][2]], m[SIGMA[i][3]]);
@@ -85,17 +94,20 @@ contract BLAKE2b is GasTest{
       G( v, 3, 4, 9, 14, m[SIGMA[i][14]], m[SIGMA[i][15]]);
     }
 
-    Log("Compress: End G");
+    //Log("Compress: End G");
 
 
     for(i=0; i<8; ++i){
       ctx.h[i] = ctx.h[i] ^ v[i] ^ v[i+8];
     }
 
-    Log("End Compress");
+    //Log("End Compress");
   }
 
   function init(BLAKE2b_ctx ctx, uint64 outlen, bytes key, uint64[2] salt, uint64[2] person) private{
+      //Log("Begin init");
+      //Log("Test Calib 123456789");
+      //Log("Test Calib 234567");
 
       uint i;
 
@@ -105,7 +117,7 @@ contract BLAKE2b is GasTest{
         ctx.h[i] = IV[i];
       }
 
-      Log("Copied IV");
+      //Log("Copied IV");
 
       ctx.h[0] = ctx.h[0] ^ 0x01010000 ^ shift_left(uint64(key.length), 8) ^ outlen; // Set up parameter block
       ctx.h[4] = ctx.h[4] ^ salt[0];
@@ -121,13 +133,13 @@ contract BLAKE2b is GasTest{
       ctx.outlen = outlen;
       i = key.length;
 
-      Log("Set up parameters");
+      //Log("Set up parameters");
 
   //    for(i = key.length; i < 128; i++){
   //      ctx.b[i] = 0;
   //    }
 
-      Log("Fill buffer");
+      //Log("Fill buffer");
 
 
       if(key.length > 0){
@@ -135,7 +147,7 @@ contract BLAKE2b is GasTest{
         ctx.c = 128;
       }
 
-      Log("Add key");
+      //Log("Add key");
 
   }
 
@@ -150,12 +162,12 @@ contract BLAKE2b is GasTest{
 //        }
         compress(ctx, false);
         ctx.c = 0;
-        delete ctx.b;
+        //delete ctx.b;
       }
 
       set8(ctx.b, uint8(input[i]), ctx.c++);
       //ctx.b[ctx.c++] = uint8(input[i]);
-      Log("Buffer refilled");
+      //Log("Buffer refilled");
     }
   }
 
@@ -165,17 +177,17 @@ contract BLAKE2b is GasTest{
     ctx.t += ctx.c;
 //    if(ctx.t[0] < ctx.c) ctx.t[1]++;
 
-    Log("Finalize: increment counters");
+    //Log("Finalize: increment counters");
 /*
     while(ctx.c < 128){
       set8(ctx.b,0,ctx.c++);
     }
 */
-    Log("Finalize: empty buffer");
+    //Log("Finalize: empty buffer");
 
     compress(ctx,true);
 
-    Log("Finalize: compress");
+    //Log("Finalize: compress");
     for(i=0; i < ctx.outlen / 8; i++){
       out[i] = toLittleEndian(ctx.h[i]);
     }
@@ -185,18 +197,13 @@ contract BLAKE2b is GasTest{
       out[ctx.outlen/8] = shift_right(toLittleEndian(ctx.h[ctx.outlen/8]),64-8*(ctx.outlen%8));
     }
 
-    Log("Format output");
+    //Log("Format output");
   }
 
   function blake2b(bytes input, bytes key, bytes salt, bytes personalization, uint64 outlen) constant public returns(uint64[8]){
-    Log("Begin init");
-    Log("Test Calib 123456789");
-    Log("Test Calib 234567");
-
     BLAKE2b_ctx memory ctx;
     uint64[8] memory out;
 
-    Log("Init context");
 
     init(ctx, outlen, key, formatInput(salt), formatInput(personalization));
     update(ctx, input);
